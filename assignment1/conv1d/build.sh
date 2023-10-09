@@ -1,0 +1,1 @@
+rm -rf build siso_conv1d_cpp.egg-info/ dist && python setup.py install
