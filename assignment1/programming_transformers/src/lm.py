@@ -106,18 +106,33 @@ class SelfAttention(nn.Module):
         """
         batch_size, seqlen = qkv.shape[0], qkv.shape[1]
         q, k, v = qkv.unbind(dim=2)
-
+        # print("q, k, v", q, k, v)
         ######## ENTER CODE HERE ########
-        softmax_scale = # TODO: compute the softmax scale
-        dot_product_scores = # TODO: compute the dot product scores
-        causal_mask = # TODO:  create a causal mask
-        dot_product_scores_masked = # TODO: mask the dot product scores
-        attention = # TODO: compute the attention scores
+        d_k = q.shape[-1]
+        # print("d_k", d_k)
+        softmax_scale = 1 / math.sqrt(d_k)
+        # print("softmax_scale", softmax_scale)
+        dot_product_scores = softmax_scale * torch.matmul(q, k.transpose(-2, -1))
+        # print("dot_product_scores", dot_product_scores)
+        causal_mask = torch.triu(torch.ones((seqlen, seqlen)), diagonal=1).bool().cuda()
+        # print("causal_mask", causal_mask)
+        dot_product_scores_masked = dot_product_scores.masked_fill(causal_mask, float('-inf'))
+        # print("dot_product_scores_masked", dot_product_scores_masked)
+        attention = F.softmax(dot_product_scores_masked, dim=-1)
+        # print("attention", attention)
+        
 
         attention_drop = F.dropout(attention, self.dropout_p if self.training else 0.0)
+        # print("attention_drop", attention_drop)
 
-        output = # TODO: compute the output of the attention layer
-
+        output = torch.matmul(attention_drop, v)
+        # print("output", output)
+        # causal_mask torch.Size([102, 102])
+        # dot_product_scores torch.Size([32, 102, 102])
+        # dot_product_scores_masked torch.Size([32, 102, 102])
+        # attention torch.Size([32, 102, 102])
+        # attention_drop torch.Size([32, 102, 102])
+        # output torch.Size([32, 102, 256])
         return output
 
 
@@ -142,18 +157,23 @@ class MHA(nn.Module):
         self.head_dim = self.embed_dim // num_heads
         
         # TODO: below, create the query, key, and value projection layers
+        self.q_proj = nn.Linear(embed_dim, embed_dim)
+        self.k_proj = nn.Linear(embed_dim, embed_dim)
+        self.v_proj = nn.Linear(embed_dim, embed_dim)
 
         self.attn = SelfAttention(attention_dropout=dropout)
         self.out_proj = nn.Linear(embed_dim, embed_dim)
 
     def forward(self, x, **kwargs):
         # constuct query, key, and value and pass it to the attention function
-        qkv = 
-
+        
+        q = self.q_proj(x)
+        k = self.k_proj(x)
+        v = self.v_proj(x)
+        qkv = torch.stack((q, k, v), dim=2)
         attention_output = self.attn(qkv, **kwargs)
-
         # compute the output projection over the attention output
-        out = self.out_proj(# TODO: FILL IN HERE)
+        out = self.out_proj(attention_output)
         return out
 
 

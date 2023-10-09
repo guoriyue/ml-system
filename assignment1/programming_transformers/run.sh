@@ -3,7 +3,7 @@ epochs=300
 lr=0.0005
 train_batch=32
 
-python src/experiments.py \
+python3 src/experiments.py \
     --task ${dataset} \
     --epochs ${epochs} \
     --learning_rate ${lr} \
