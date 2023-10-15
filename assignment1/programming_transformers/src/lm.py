@@ -104,8 +104,19 @@ class SelfAttention(nn.Module):
         ---------
             qkv: The tensor containing the query, key, and value. (B, S, 3, H, D)
         """
+        # print("qkv", qkv.shape)
+        # qkv torch.Size([32, 102, 3, 4, 64])
         batch_size, seqlen = qkv.shape[0], qkv.shape[1]
-        q, k, v = qkv.unbind(dim=2)
+        q, k, v = qkv.unbind(dim=2) # (B, S, H, D)
+        # q.shape torch.Size([32, 4, 102, 64])
+        # k.shape torch.Size([32, 4, 102, 64])
+        # v.shape torch.Size([32, 4, 102, 64])
+        q = q.transpose(1, 2) # (B, H, S, D)
+        k = k.transpose(1, 2) # (B, H, S, D)
+        v = v.transpose(1, 2) # (B, H, S, D)
+        # print("q.shape", q.shape)
+        # print("k.shape", k.shape)
+        # print("v.shape", v.shape)
         # print("q, k, v", q, k, v)
         ######## ENTER CODE HERE ########
         d_k = q.shape[-1]
@@ -113,19 +124,25 @@ class SelfAttention(nn.Module):
         softmax_scale = 1 / math.sqrt(d_k)
         # print("softmax_scale", softmax_scale)
         dot_product_scores = softmax_scale * torch.matmul(q, k.transpose(-2, -1))
-        # print("dot_product_scores", dot_product_scores)
+        # print("dot_product_scores", dot_product_scores.shape)
         causal_mask = torch.triu(torch.ones((seqlen, seqlen)), diagonal=1).bool().cuda()
         # print("causal_mask", causal_mask)
+        # print("seqlen", seqlen)
+        # print("causal_mask.shape", causal_mask.shape)
+        # causal_mask.shape torch.Size([102, 102])
         dot_product_scores_masked = dot_product_scores.masked_fill(causal_mask, float('-inf'))
         # print("dot_product_scores_masked", dot_product_scores_masked)
         attention = F.softmax(dot_product_scores_masked, dim=-1)
-        # print("attention", attention)
+        # print("attention", attention.shape)
+        # attention torch.Size([32, 4, 102, 102])
         
-
+        
         attention_drop = F.dropout(attention, self.dropout_p if self.training else 0.0)
         # print("attention_drop", attention_drop)
-
+        # attention torch.Size([32, 4, 102, 102])
+        # v torch.Size([32, 4, 102, 64])
         output = torch.matmul(attention_drop, v)
+        output = output.transpose(1, 2).reshape(batch_size, seqlen, -1)
         # print("output", output)
         # causal_mask torch.Size([102, 102])
         # dot_product_scores torch.Size([32, 102, 102])
@@ -133,6 +150,8 @@ class SelfAttention(nn.Module):
         # attention torch.Size([32, 102, 102])
         # attention_drop torch.Size([32, 102, 102])
         # output torch.Size([32, 102, 256])
+        # nn.Linear(embed_dim, embed_dim)
+        # [32, 4, 102, 64]
         return output
 
 
@@ -166,10 +185,28 @@ class MHA(nn.Module):
 
     def forward(self, x, **kwargs):
         # constuct query, key, and value and pass it to the attention function
-        
-        q = self.q_proj(x)
-        k = self.k_proj(x)
-        v = self.v_proj(x)
+        # print("x", x.shape)
+        # x torch.Size([32, 102, 256])
+        # batch_size: 32,
+        # embed_dim: 768,
+        # num_heads 12
+        # 768/12 = 64
+        # q, k, v torch.Size([32, 102, 256]) torch.Size([32, 102, 256]) torch.Size([32, 102, 256])
+        # d_model=768,
+        # n_layers=12,
+        # vocab_size=50257,
+        # num_heads=12,
+        # self.embed_dim
+        # self.qkv_proj = nn.Linear(input_dim, 3*embed_dim)
+        # qkv.reshape(batch_size, seq_length, self.num_heads, 3*self.head_dim)
+        # print(self.embed_dim) # 256
+        # print("self.num_heads", self.num_heads) # 4
+        # (B, S, 3, H, D)
+        q = self.q_proj(x).reshape(x.shape[0], x.shape[1], self.num_heads, self.head_dim)
+        k = self.k_proj(x).reshape(x.shape[0], x.shape[1], self.num_heads, self.head_dim)
+        v = self.v_proj(x).reshape(x.shape[0], x.shape[1], self.num_heads, self.head_dim)
+        # print("q, k, v", q.shape, k.shape, v.shape)
+        # qkv torch.Size([32, 3, 4, 102, 64])
         qkv = torch.stack((q, k, v), dim=2)
         attention_output = self.attn(qkv, **kwargs)
         # compute the output projection over the attention output

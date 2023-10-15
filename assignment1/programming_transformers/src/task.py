@@ -73,7 +73,7 @@ class LMSynthetic:
         loss = self.loss_fn(all_outputs, all_targets)
         print(f"Epoch: {epoch} | Loss: {loss.item()}")
         
-    def test(self):
+    def test(self, epoch=None):
         self.model.eval()
         test_loss = 0
         all_outputs = []
@@ -95,6 +95,11 @@ class LMSynthetic:
             test_loss += loss.item()
             test_accuracy = accuracy_ignore_index(all_outputs, all_targets)
             print((batch_idx, len(self.testloader), 'Loss: %.3f | Acc: %.3f%% | Samples: %d' % ((test_loss/(batch_idx+1)), test_accuracy, sample_size)))
+            if test_accuracy >= 0.9 and epoch is not None:
+                f=open("accuracy.txt", "a+")
+                f.write(f"{epoch} {test_accuracy}\n")
+                f.close()
+                exit(0)
 
     def run(self):
         self.loss_fn = nn.CrossEntropyLoss()
@@ -102,7 +107,7 @@ class LMSynthetic:
         self.scheduler = optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=self.args["epochs"], eta_min=0.0)
         for epoch in range(self.args["epochs"]):
             self.train(epoch)
-            self.test()
+            self.test(epoch=epoch)
             self.scheduler.step()
 
         
