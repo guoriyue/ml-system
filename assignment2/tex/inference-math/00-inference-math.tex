@@ -1,0 +1,27 @@
+\section{Inference Math (50 pts)} 
+We're going to build on our understanding of Transformers from the last assignment to better understand when and where certain optimizations make sense. 
+
+
+
+\subsection{Naive GPT2-XL Inference (17 pts)}
+
+\paragraph{Problem specifications} GPT-2-XL has the following architectural details:
+\begin{itemize}
+    \item $n\_vocab = 50257$
+    \item $n\_embed = 1600$
+    \item $n\_heads = 25$
+    \item $n\_layers = 48$
+    \item $mlp\_hidden\_dim = 6400$
+\end{itemize}
+
+Some additional notes for this problem:
+\begin{itemize}
+    \item We'll use $B$ as the batch size and $N$ as the sequence length.
+    \item We're going to ignore the embedding, LayerNorms, skip connections, and language modeling head as they're all relatively inconsequential compared to the core transformer loop.
+    \item Assume all computations are done with 16-bit precision.
+    \item We are focused on inference, so the forward pass.
+\end{itemize}
+
+\input{inference-math/01-naive}
+\input{inference-math/02-kv-caching}
+\input{inference-math/03-speculative-decoding}

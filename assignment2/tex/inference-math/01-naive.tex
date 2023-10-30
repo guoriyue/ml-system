@@ -1,0 +1,39 @@
+\subsubsection{MHA (4 pts)}
+
+How many FLOPs and how much memory bandwidth is required to run MHA on a $B\times N$ batch of tokens? (Use your results from last time, but don't forget about the final output projection!)
+
+\textit{Hint: your answer will take the form:\\ $FLOPS = C_1 \times BN + C_2 \times BN^2$ \\ $MEM = C_3 + C_4 \times BN + C_5 \times BN^2 + C_6 \times N^2$}
+
+\begin{answer}
+
+\end{answer}
+
+\subsubsection{MLP (3 pts)}
+
+The typical MLP in a transformer includes a first projection from the $N \times n\_embed$ input $X$ to a value that is $N \times 4(n\_embed)$, by multiplying the input with a $n\_embed \times 4(n\_embed)$ matrix. Next, there is a second projection from the $N \times 4(n\_embed)$ matrix to $N \times n\_embed$, by multiplying the with a $4(n\_embed) \times d$ matrix. How many FLOPs and how much memory bandwidth is required to run an MLP on a $B\times N$ batch of tokens? 
+
+\begin{answer}
+
+\end{answer}
+
+\subsubsection{GPT2-XL (3 pts)}
+
+How many FLOPs and how much memory bandwidth is required to run the full GPT2-XL model?
+
+\begin{answer}
+
+\end{answer}
+
+
+\subsubsection{Building Intuition (7 pts)}
+
+As with the previous assignment, we'll assume an NVIDIA T4 GPU with 300 GB/s of bandwidth and 65 TFLOPs of compute. Let's look at a few scenarios to try to understand inference bottlenecks in practice:
+\begin{itemize}
+
+\end{itemize}
+
+In each case: how much compute and bandwidth are required for a forward pass? Is the GPU memory bound or compute bound?
+
+\begin{answer}
+
+\end{answer}

@@ -131,7 +131,7 @@ class SelfAttention(nn.Module):
         # print("causal_mask.shape", causal_mask.shape)
         # causal_mask.shape torch.Size([102, 102])
         dot_product_scores_masked = dot_product_scores.masked_fill(causal_mask, float('-inf'))
-        # print("dot_product_scores_masked", dot_product_scores_masked)
+        print("dot_product_scores_masked", dot_product_scores_masked)
         attention = F.softmax(dot_product_scores_masked, dim=-1)
         # print("attention", attention.shape)
         # attention torch.Size([32, 4, 102, 102])
@@ -202,6 +202,7 @@ class MHA(nn.Module):
         # print(self.embed_dim) # 256
         # print("self.num_heads", self.num_heads) # 4
         # (B, S, 3, H, D)
+        
         q = self.q_proj(x).reshape(x.shape[0], x.shape[1], self.num_heads, self.head_dim)
         k = self.k_proj(x).reshape(x.shape[0], x.shape[1], self.num_heads, self.head_dim)
         v = self.v_proj(x).reshape(x.shape[0], x.shape[1], self.num_heads, self.head_dim)

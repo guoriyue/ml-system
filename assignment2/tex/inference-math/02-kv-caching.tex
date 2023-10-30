@@ -1,0 +1,52 @@
+\subsection{Decoding GPT2-XL with KV caching! (17 pts)}
+
+We're now going to assume that we've already filled our KV cache with $B \times N$ tokens, and we want to decode $B$ new tokens in parallel using that KV cache. Let's do the same math and see what changes!
+
+\subsubsection{Warmup (1 pt)}
+
+How big is the KV cache at each layer? Assume it's also stored in 16-bit precision.
+
+\begin{answer}
+
+\end{answer}
+
+\subsubsection{MHA (3 pts)}
+
+How many FLOPs and how much memory bandwidth is required to run MHA to decode this batch of $B$ tokens?
+\textit{Hint: there's no masking required, and no $N^2$ terms anymore!}
+
+\begin{answer}
+   
+\end{answer}
+
+\subsubsection{MLP (3 pts)}
+
+How many FLOPs and how much memory bandwidth is required to run the MLP on this batch of $B$ tokens?
+
+\begin{answer}
+
+\end{answer}
+
+\subsubsection{GPT2-XL (3 pts)}
+
+How many FLOPs and how much memory bandwidth is required to decode this batch of $B$ tokens through the full GPT2-XL model?
+
+\begin{answer}
+  
+\end{answer}
+
+\subsubsection{Comparing with Naive Inference (7 pts)}
+
+Let's look at the same cases we examined before (N-1 since this is now the size of the KV cache).
+\begin{itemize}
+    \item B=1 and N=31
+    \item B=1 and N=1023
+    \item B=64 and N=31
+    \item B=64 and N=1023
+\end{itemize}
+
+How much compute and bandwidth are now required for a forward pass with the KV cache in place? Are we memory or compute bound? And (roughly) how much faster would we expect case each to run on the T4 GPU?
+
+\begin{answer}
+   
+\end{answer}

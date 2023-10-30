@@ -1,0 +1,39 @@
+\subsection{Speculative Decoding (16 pts)}
+
+\textbf{Problem specifications} We're now going to turn our attention to the $B=1$ case, where we can really focus on reducing latency. To do this, we'll be speculatively decoding GPT2-XL with GPT2, which has the following architectural details. Again, as with the previous assignment, we'll assume an NVIDIA T4 GPU with 300 GB/s of bandwidth and 65 TFLOPs of compute.
+\begin{itemize}
+    \item $n\_vocab = 50257$
+    \item $n\_embed = 768$
+    \item $n\_heads = 12$
+    \item $n\_layers = 12$
+    \item $mlp\_hidden\_dim = 3072$
+\end{itemize}
+ 
+
+\subsubsection{Shortcut to $B=1$ Inference Latency -- GPT2 (4 pts)}
+
+Take a look back at your result for decoding the $B=1$ case with KV caching enabled. What's (by far) the dominant factor in the latency of decoding a batch? Use that to derive a constant approximation for the cost of decoding a token for GPT2 on a T4 GPU. Also, in this case don't neglect the $768 \times 50257$ language modeling head, as it does matter quite a bit for the smaller GPT2.
+
+\textit{Your answer should be in microseconds.}
+
+\begin{answer}
+
+\end{answer}
+
+\subsubsection{Shortcut to $B=1$ Inference Latency -- GPT2-XL (4 pts)}
+
+What does this same approximation give you for decoding the latency of decoding a single batch with GPT2-XL? What's the relative cost of decoding the two models?
+
+\textit{Your answer should be in milliseconds.}
+
+\begin{answer}
+
+\end{answer}
+
+\subsubsection{Optimizing Tokens (8 pts)}
+
+Let's assume that GPT2-XL and GPT2 agree on their predictions with greedy decoding $75\%$ of the time. How many tokens should we decode at once with speculative decoding for the optimal speedup? And how would that change if we sampled with temperature $T>0$?
+
+\begin{answer}
+  
+\end{answer}

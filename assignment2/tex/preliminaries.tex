@@ -1,0 +1,37 @@
+\section{Preliminaries}
+
+We will study two main efficient inference techniques in this assignment:
+\begin{enumerate}
+    \item KV caching
+    \item Speculative decoding
+\end{enumerate}
+
+In this section, we will recap the preliminaries and resources for each of these two techniques.
+
+\subsection{KV Caching} 
+Recall that in KV caching, we store the keys and values from previously processed tokens so that we do not need to recompute them for every next-token generation. We have discussed this technique a few times in class.
+
+\textbf{Resources} You can reference Lectures 2-4 (including discussion of Transformers, KV caching, and FLOPs computations), the assignment 1 solutions (released after late days for all students expire), and this additional resource on KV caching  \url{https://kipp.ly/transformer-inference-arithmetic/}.
+
+\subsection{Speculative decoding}
+Speculative decoding is another cutting edge efficient inference technique. We briefly discussed  this technique in Lecture 4 (see the last few slides) and point out this resource \url{https://jaykmody.com/blog/speculative-sampling/}. In addition to this, we provide the preliminaries here:
+
+\paragraph{Setup} We have a larger (and thus slower, but often generally higher quality) model $M_{l}$ and a smaller (and thus faster, but also generally lower quality) model $M_{s}$. The overall objective is: suppose we have tokens $\{x_1, ..., x_k\}$ and want to generate the next tokens $\{x_{k+1}, ..., x_n\}$ with $M_{l}$. Suppose $M_{l}$ takes $t_{l}$ time to generate these tokens. The objective of speculative decoding is: can we leverage the smaller, faster $M_{s}$ to perform the generation of the $n-(k+1)$ tokens in $t_{s} < t_{l}$. 
+
+\paragraph{Algorithm} The vanilla speculative decoding algorithm is as follows. Suppose we want our \textbf{final sequence} to be of length $n$. While the number of total tokens is less than $n$ (since we want to go up until $x_n$), repeat the following steps: 
+\begin{enumerate}
+    \item Use $M_{s}$ to generate $m$ tokens (e.g. $\{x_{k+1}, ..., x_{k+m}\}$), conditioned on the prior tokens $P$ (e.g. $\{x_1, ..., x_k\}$ initially). 
+    \item Construct $m$ unique prefixes, by plugging in the predictions from $M_{s}$:
+    $$\mathrm{prefix}_1 = \{x_1, ..., x_{k}\}$$
+    $$\mathrm{prefix}_2 = \{x_1, ..., x_{k+1}\}$$
+    $$...$$
+    $$\mathrm{prefix}_m =\{x_1, ..., x_{k+m-1}\}$$
+    \item Use $M_{l}$ to perform generation for the single next token, given each of these prefixes, in parallel (i.e. we can \textit{batch} the prefixes). Now we have $S = \{x_{k+1}, ..., x_{k+m}\}$ as the predictions from $M_{s}$ and $L = \{x_{k+1}, ..., x_{k+m}\}$ as the predictions from $M_{l}$. 
+    \item Iterate through the two lists $S$ and $L$. While the items $x_i \in S$ and $x_i \in L$ match, keep going and add $x_i$ to the \textbf{final sequence}. If the length of the \textbf{final sequence} is now $n$, we can stop. Upon a mismatch, throw away the remaining tokens in each of the lists. Return to step 1, using the current \textbf{final sequence} as the new $P$.
+\end{enumerate}
+
+\paragraph{Analysis} Note that every token in the \textbf{final sequence} is what $M_{l}$ would exactly generate if we were to use standard decoding / KV caching. Note that in the worst case if $M_{s}$ gets every generation incorrect, we degrade to KV caching. This is because using $\mathrm{prefix}_1$ above and plugging this into $M_{l}$, one loop of the above algorithm at least yields a keepable $x_{k+1}$ next-token prediction.
+
+$M_{s}$ speeds up the generation process more if $M_{s}$ is increasingly faster than $M_{l}$ at predicting the next token \textbf{and} $M_{s}$ tends to make several predictions that match $M_{l}$ (i.e. quality is not terrible). We also are batching the prefixes in step $2$ when we pass them to $M_{l}$, so the batch needs to fit within our system's memory (we won't grapple with this piece for our assignment).
+
+

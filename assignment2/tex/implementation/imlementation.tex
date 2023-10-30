@@ -1,0 +1,37 @@
+\section{Implementation (50 pts)}
+
+In this section, you'll take Karpathy's nanoGPT implementation and improve its GPT2 inference throughput by 10x with KV caching and its inference latency by 2x with speculative decoding. The teaching staff has added some scaffolding to help guide your implementation, but the code is essentially as Karpathy wrote it.
+
+All of the changes you'll need to make are in model.py.
+
+\subsubsection{KV Caching KV Caching (30 pts)}
+
+For this section, you'll implement a KV cache for GPT2. There are five sections to fill in:
+\begin{itemize}
+    \item Register a buffer for the KV cache with the right dimensions. You can see examples of register\_buffers in the ``model.py'' file.
+    \item Add prefilling the KV cache to the forward pass of CausalSelfAttention.
+    \item Write the decode CausalSelfAttention implementation, which uses the KV cache.
+    \item Write the decode implementation for the main GPT model class. (This one's easy.)
+    \item Write generate\_kv to generate many sequential tokens using KV cache based decoding.
+\end{itemize}
+
+We've had some trouble getting gpt2-xl to run on the Colab T4 instances, so gpt2-large will be fine for this assignment. A good implementation should increase throughput on the provided \texttt{run.sh} test by $>10\times$. This can be run on colab using the provided \texttt{inference.ipynb} notebook.
+
+\subsubsection{Speculative Decoding (20 pts)}
+
+For this section, you'll implement speculative decoding for GPT2. For this, all you need to do is write generate\_speculative in model.py. A good implementation should reduce latencies on the provided run.sh test by around $2\times$. Good luck!
+
+
+\subsubsection{Tips}
+
+Some tips to guide your implementation:
+\begin{itemize}
+    \item Get everything working on gpt2 (small) first -- it will make your development cycle much faster! Only once everything is working should you run on the bigger models.
+    \item Don't worry about the exact match passing as long as you're getting good outputs -- enforcing numerically identical results is actually extremely difficult due to how CuBLAS is implemented by NVIDIA. But, you can set DEBUG=True in model.py, and that will make things significantly \textit{more} deterministic than they would otherwise be, at the cost of speed. You may need to run
+    \begin{lstlisting}
+    export CUBLAS_WORKSPACE_CONFIG=:4096:8
+    \end{lstlisting}
+    in order to get debug mode to work. Note that debug True hurts speed because it disables the use of tensor cores and uses FP32 instead of BF16.
+    \item Don't bother with trying to get your speculative decoding to use KV caching. It's unlikely to have a significant effect unless you want to run extremely long prompts on weak GPUs.
+    \item Speculative decoding may look simpler than the KV cache but can be deceptively tricky. We'd recommend simulating it by hand on paper, and then using that to guide your implementation.
+\end{itemize}
