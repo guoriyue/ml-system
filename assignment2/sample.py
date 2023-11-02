@@ -8,7 +8,7 @@ import torch
 import tiktoken
 from model import GPTConfig, GPT, DEBUG
 import time, json
-
+# DEBUG = True
 # -----------------------------------------------------------------------------
 init_from = 'resume' # either 'resume' (from an out_dir) or a gpt2 variant (e.g. 'gpt2-xl')
 out_dir = 'out' # ignored if init_from is not 'resume'
@@ -112,16 +112,19 @@ with torch.no_grad():
             model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
 print('Finished warmup')
 # run
-t0n = time.time()
-with torch.no_grad():
-    with ctx:
-        for k in range(num_samples):
-            torch.manual_seed(k+1337) # we want consistency
-            y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
-            generations_naive.append(y[0].tolist())
-            print(decode(generations_naive[-1]))
-            print('---------------')
-t1n  = time.time()
+try:
+  t0n = time.time()
+  with torch.no_grad():
+      with ctx:
+          for k in range(num_samples):
+              torch.manual_seed(k+1337) # we want consistency
+              y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
+              generations_naive.append(y[0].tolist())
+              print(decode(generations_naive[-1]))
+              print('---------------')
+  t1n  = time.time()
+except Exception as e:
+  print(e)
 
 
 print(f'\n---------------\n\nRunning kv cache inference with top_k={top_k} and temperature={temperature:3f}\n\n---------------\n')
@@ -137,17 +140,20 @@ with torch.no_grad():
             model.generate_kv(x, max_new_tokens, temperature=temperature, top_k=top_k)
 print('Finished warmup')
 # run
-t0k = time.time()
-with torch.no_grad():
-    with ctx:
-        for k in range(num_samples):
-            torch.manual_seed(k+1337) # we want consistency
-            y = model.generate_kv(x, max_new_tokens, temperature=temperature, top_k=top_k)
-            generations_kv.append(y[0].tolist())
-            print(decode(generations_kv[-1]))
-            print('---------------')
-t1k  = time.time()
-
+try:
+  t0k = time.time()
+  with torch.no_grad():
+      with ctx:
+          for k in range(num_samples):
+              torch.manual_seed(k+1337) # we want consistency
+              y = model.generate_kv(x, max_new_tokens, temperature=temperature, top_k=top_k)
+              generations_kv.append(y[0].tolist())
+              print(decode(generations_kv[-1]))
+              print('---------------')
+  t1k  = time.time()
+except Exception as e:
+  print(e)
+  
 if x.size(0) == 1:
 
     print(f'\n---------------\n\nRunning speculative inference with top_k={top_k}, temperature={temperature:3f}, and speculative_tokens={speculative_tokens}\n\n---------------\n')
@@ -171,17 +177,19 @@ if x.size(0) == 1:
                 model.generate_speculative(x, max_new_tokens, draft_model, temperature=temperature, top_k=top_k)
     print('Finished warmup')
     # run
-    t0s = time.time()
-    with torch.no_grad():
-        with ctx:
-            for k in range(num_samples):
-                torch.manual_seed(k+1337) # we want consistency
-                y = model.generate_speculative(x, max_new_tokens, draft_model, temperature=temperature, top_k=top_k)
-                generations_spec.append(y[0].tolist())
-                print(decode(generations_spec[-1]))
-                print('---------------')
-    t1s  = time.time()
-
+    try:
+      t0s = time.time()
+      with torch.no_grad():
+          with ctx:
+              for k in range(num_samples):
+                  torch.manual_seed(k+1337) # we want consistency
+                  y = model.generate_speculative(x, max_new_tokens, draft_model, temperature=temperature, top_k=top_k)
+                  generations_spec.append(y[0].tolist())
+                  print(decode(generations_spec[-1]))
+                  print('---------------')
+      t1s  = time.time()
+    except Exception as e:
+      print(e)
 else:
     print('Skipping speculative inference because batch_size > 1')
 
@@ -192,6 +200,9 @@ if x.size(0) == 1: print(f'[SPEC]  Generated {tokens_generated} tokens in {t1s-t
 
 all_matched = True
 # generations_matching and generations_kv
+print("generations_naive", generations_naive)
+print("generations_kv", generations_kv)
+print("generations_spec", generations_spec)
 num_matching = len([1 for i in range(len(generations_naive)) if generations_naive[i] == generations_kv[i]])
 print(f'NAIVE and KV generations matched on {num_matching} positions')
 if num_matching < len(generations_naive):

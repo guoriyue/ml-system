@@ -79,9 +79,12 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
-        print("k.shape, q.shape, v.shape", k.shape, q.shape, v.shape)
-        print("self.kv_cache.shape", self.kv_cache.shape)
-        print("B, T, C", B, T, C)
+        # print("k.shape, q.shape, v.shape", k.shape, q.shape, v.shape)
+        # print("self.kv_cache.shape", self.kv_cache.shape)
+        # print("B, T, C", B, T, C)
+        # B, T, C 32 211 1280
+        # k.shape, q.shape, v.shape torch.Size([32, 20, 211, 64]) torch.Size([32, 20, 211, 64]) torch.Size([32, 20, 211, 64])
+        # self.kv_cache.shape torch.Size([2, 32, 20, 512, 64])
         ### Set KV cache if it exists:
         if self.kv_enabled:
             ### YOUR CODE HERE
@@ -90,7 +93,8 @@ class CausalSelfAttention(nn.Module):
             self.seq_pos = T
 
             # update the kv cache
-            self.kv_cache[:, :B, :, :self.seq_pos, :] = torch.cat((k, v), dim=0)
+            self.kv_cache[0, :B, :, :self.seq_pos, :] = k
+            self.kv_cache[1, :B, :, :self.seq_pos, :] = v
 
             ### END YOUR CODE HERE
 
@@ -125,23 +129,24 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
-
+        # print("in block self.seq_pos, T, k.shape, v.shape", self.seq_pos, T, k.shape, v.shape)
         # update the kv cache with the additional input
-        new_kv = torch.cat((k, v), dim=0)
-        self.kv_cache[:, :B, :, self.seq_pos:self.seq_pos + T, :] = new_kv
+        self.kv_cache[0, :B, :, self.seq_pos:self.seq_pos + T, :] = k
+        self.kv_cache[1, :B, :, self.seq_pos:self.seq_pos + T, :] = v
 
         # compute manual implmentation of attention using the kv cache
         k_concat = torch.cat((self.kv_cache[0, :B, :, :self.seq_pos, :], k), dim=2)
         v_concat = torch.cat((self.kv_cache[1, :B, :, :self.seq_pos, :], v), dim=2)
 
         att = (q @ k_concat.transpose(-2, -1)) * (1.0 / math.sqrt(k_concat.size(-1)))
-        att = att.masked_fill(self.bias[:, :, :att.size(2), :att.size(3)] == 0, float('-inf'))
+        att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf'))
         att = F.softmax(att, dim=-1)
         att = self.attn_dropout(att)
         y = att @ v_concat  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+
         
         # compute output projection
-        y = y.transpose(1, 2).contiguous().view(B, T, C)  # re-assemble all head outputs side by side
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
         y = self.resid_dropout(self.c_proj(y))
 
         # update the position
@@ -296,24 +301,22 @@ class GPT(nn.Module):
 
         # create token and position embeddings
         tok_emb = self.transformer.wte(idx)
+        # print("self.seq_pos, self.seq_pos + t", self.seq_pos, self.seq_pos + t)
         pos = torch.arange(self.seq_pos, self.seq_pos + t, dtype=torch.long, device=device)
         pos_emb = self.transformer.wpe(pos)
         x = self.transformer.drop(tok_emb + pos_emb)
-
-
+        
         # perform decoding
         for block in self.transformer.h:
-            x = block(x)
+            x = block.decode(x)
         
         # apply transformer layer normalization
         x = self.transformer.ln_f(x)
-        
 
         # apply the language model head
         logits = self.lm_head(x)
 
         # return the output
-        self.seq_pos += t
         return logits
 
         ### END YOUR CODE HERE
@@ -435,13 +438,21 @@ class GPT(nn.Module):
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
         """
-        for _ in range(max_new_tokens):
+        for cnt in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
             # forward the model to get the logits for the index in the sequence
+            
             logits, _ = self(idx_cond)
+            
+            
+            # print("generate logits", logits)
+            # return
+            
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
+            # print("logits", logits)
+            # print("logits", logits)
             # optionally crop the logits to only the top k options
             if top_k is not None:
                 if top_k == 1:
@@ -455,10 +466,13 @@ class GPT(nn.Module):
 
             # sample from the distribution with temperature
             idx_next = torch.multinomial(probs, num_samples=1)
+            # print("top_k", top_k)
+            # print("first idx_next", idx_next)
+            # if cnt == 1:
+            #   return
 
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
-
         return idx
 
     @torch.no_grad()
@@ -471,28 +485,47 @@ class GPT(nn.Module):
 
         # Generate the full KV cache and decode the first token
 
-        new_tokens = torch.empty((idx.size(0), 0))
+        new_tokens = torch.empty((idx.size(0), 0), device=idx.device)
 
         ### YOUR CODE HERE
 
         # run the idx through the forward pass to get the logits
         logits, _ = self.forward(idx) 
+        # print("generate_kv logits", logits)
+        # return
         
         # pluck the logits at the final position and scale by desired temperature
-        logits_to_use = logits[:, -1, :] / temperature
+        logits = logits[:, -1, :] / temperature
         
         # optionally crop the logits to only the top k options
+
+        # idx = torch.cat((idx, torch.argmax(logits, dim=-1).reshape((-1,1))), dim=1) # using argmax here preserves RNG state
+        #             continue
+        # v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+        # logits[logits < v[:, [-1]]] = -float('Inf')
+
+
         if top_k == 1:
-            idx_next = torch.argmax(logits_to_use, dim=-1).unsqueeze(-1)
+            idx_next = torch.argmax(logits, dim=-1).unsqueeze(-1)
+            # idx_next = torch.cat((idx, torch.argmax(logits, dim=-1).reshape((-1,1))), dim=1)
         else:
-            logits_to_use = torch.topk(logits_to_use, top_k, dim=-1).values
-            probs = F.softmax(logits_to_use, dim=-1)
+            v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+            logits[logits < v[:, [-1]]] = -float('Inf')
+            
+            # apply softmax to convert logits to (normalized) probabilities
+            probs = F.softmax(logits, dim=-1)
+
+            # sample from the distribution with temperature
             idx_next = torch.multinomial(probs, num_samples=1)
+            # logits_to_use = torch.topk(logits_to_use, top_k, dim=-1).values
+            # probs = F.softmax(logits_to_use, dim=-1)
+            # idx_next = torch.multinomial(probs, num_samples=1)
 
 
         # save the new tokens
-        new_tokens = torch.cat((new_tokens, idx_next), dim=1)
-        
+        new_tokens = torch.cat((new_tokens, idx_next), dim=1).to(device=idx.device, dtype=torch.long)
+        # print("top_k", top_k)
+        # print("first idx_next", idx_next)
         ### END YOUR CODE HERE
 
         for _ in range(max_new_tokens-1):
@@ -501,18 +534,38 @@ class GPT(nn.Module):
             ### YOUR CODE HERE
 
             # decode from the new tokens to get the logits
-            logits, _ = self.decode(torch.cat((idx, new_tokens), dim=1))
+            # print("torch.cat((idx, new_tokens), dim=1).shape", torch.cat((idx, new_tokens), dim=1).shape)
+            # print("idx, new_tokens", idx, new_tokens)
+            # print("idx_next", idx_next)
+            # logits = self.decode(torch.cat((idx, new_tokens), dim=1))
+            logits = self.decode(idx_next)
+            
 
             # pluck the logits at the final position and scale by desired temperature
-            logits_to_use = logits[:, -1, :] / temperature
+            logits = logits[:, -1, :] / temperature
+            # print("logits", logits)
 
             # optionally crop the logits to only the top k options
             if top_k == 1:
-                idx_next = torch.argmax(logits_to_use, dim=-1).unsqueeze(-1)
+                idx_next = torch.argmax(logits, dim=-1).unsqueeze(-1)
+                # idx_next = torch.cat((idx, torch.argmax(logits, dim=-1).reshape((-1,1))), dim=1)
             else:
-                logits_to_use = torch.topk(logits_to_use, top_k, dim=-1).values
-                probs = F.softmax(logits_to_use, dim=-1)
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -float('Inf')
+                
+                # apply softmax to convert logits to (normalized) probabilities
+                probs = F.softmax(logits, dim=-1)
+
+                # sample from the distribution with temperature
                 idx_next = torch.multinomial(probs, num_samples=1)
+            # print("second idx_next", idx_next)
+            # return 
+            # if top_k == 1:
+            #     idx_next = torch.argmax(logits_to_use, dim=-1).unsqueeze(-1)
+            # else:
+            #     logits_to_use = torch.topk(logits_to_use, top_k, dim=-1).values
+            #     probs = F.softmax(logits_to_use, dim=-1)
+            #     idx_next = torch.multinomial(probs, num_samples=1)
 
             # store the new tokens
             new_tokens = torch.cat((new_tokens, idx_next), dim=1)
@@ -550,11 +603,21 @@ class GPT(nn.Module):
             ### YOUR CODE HERE
 
             # use the draft_model to generate speculative tokens
-            idx_speculative, _ = draft_model.generate(idx_cond, num_speculative, temperature, top_k=1)
-            idx_speculative = torch.cat((idx_cond, idx_speculative), dim=1)
+            # print("draft_model.generate", draft_model.generate)
+            # self, idx, max_new_tokens, temperature=1.0, top_k=None):
+            idx_speculative = draft_model.generate(idx_cond, num_speculative, temperature, top_k=1)
+            # print("idx_speculative", idx_speculative)
+            # print("idx_speculative.shape", idx_speculative.shape)
+            # print("idx_cond.shape", idx_cond.shape)
+            # idx_speculative = torch.cat((idx_cond, idx_speculative[:, -4:]), dim=1)
+            # print("idx_speculative.shape", idx_speculative.shape)
+            # exit()
+            # idx_speculative.shape torch.Size([1, 540])
+            # idx_cond.shape torch.Size([1, 269])
+
 
             # obtain the logits from the main model by passing in the idx_speculative
-            all_logits, _ = self.forward(idx_speculative)
+            speculative_logits, _ = self.forward(idx_speculative)
             
             ### END YOUR CODE HERE
 
@@ -563,14 +626,34 @@ class GPT(nn.Module):
             ### YOUR CODE HERE
 
             # iterate from the end position of idx_cond (prefix sequence) to the end position of idx_speculative (generated sequence)
-            for i in range(idx_cond.size(1), idx_speculative.size(1)):
+            # print("idx_cond.size(1), idx_speculative.size(1)", idx_cond.size(1), idx_speculative.size(1))
+            for i in range(idx_cond.size(1)-1, idx_speculative.size(1)):
                 # pluck the logits at the current position and scale by desired temperature
-                logits = all_logits[:, i, :] / temperature
+
+                # new_tokens = torch.empty((idx.size(0), 0), device=idx.device)
+                logits = speculative_logits[:, i, :] / temperature
+                # print("logits", logits)
+                # return
                 
                 # optionally crop the logits to only the top k options
                 if top_k is not None:
-                    logits = torch.topk(logits, top_k, dim=-1).values
+                    v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                    logits[logits < v[:, [-1]]] = -float('Inf')
 
+                # if top_k is not None:
+                # if top_k == 1:
+                #     idx = torch.cat((idx, torch.argmax(logits, dim=-1).reshape((-1,1))), dim=1) # using argmax here preserves RNG state
+                #     continue
+                # v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                # logits[logits < v[:, [-1]]] = -float('Inf')
+
+
+                # if top_k is not None:
+                #     if top_k == 1:
+                #         idx = torch.cat((idx, torch.argmax(logits, dim=-1).reshape((-1,1))), dim=1) # using argmax here preserves RNG state
+                #         continue
+                #     v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                #     logits[logits < v[:, [-1]]] = -float('Inf')
                 # apply softmax to convert logits to (normalized) probabilities
                 probs = F.softmax(logits, dim=-1)
 
@@ -579,7 +662,8 @@ class GPT(nn.Module):
 
                 # append sampled index to the running sequence and continue
                 idx = torch.cat((idx, idx_next), dim=1)
-
+                # print("idx_next, idx_speculative[:, i]", idx_next, idx_speculative[:, i])
+                # print("idx_next.item() != idx_speculative[:, i].item()", idx_next.item() != idx_speculative[:, i].item())
                 # end the loop if the next token does not match the next token in idx_speculative
                 if idx_next.item() != idx_speculative[:, i].item():
                     break
@@ -588,3 +672,69 @@ class GPT(nn.Module):
                 
         print(f"speculative decoding ran for {loop_counter} iterations")
         return idx[:,:idx_length_original+max_new_tokens]
+
+
+# logits tensor([[286.7500, 292.0000, 286.5000,  ..., 269.2500, 272.0000, 297.0000]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[ -80.9375,  -76.8125,  -82.2500,  ..., -103.1250,  -97.7500,
+#           -75.1250]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[ -98.0625,  -98.6250,  -97.5625,  ..., -128.5000, -122.7500,
+#          -100.5625]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-141.6250, -136.8750, -141.3750,  ..., -175.5000, -165.1250,
+#          -143.3750]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-101.3125,  -96.2500, -102.1875,  ..., -127.8750, -125.5000,
+#          -101.1875]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[127.8750, 127.2500, 133.3750,  ..., 103.0000, 106.5625, 140.5000]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[257.0000, 263.0000, 265.2500,  ..., 235.6250, 233.0000, 267.0000]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[-152.8750, -141.7500, -138.8750,  ..., -179.3750, -185.0000,
+#          -157.2500]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-180.5000, -184.3750, -174.7500,  ..., -202.6250, -204.7500,
+#          -166.5000]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-662.0000, -655.5000, -662.0000,  ..., -712.5000, -726.0000,
+#          -654.0000]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-243.0000, -235.1250, -228.1250,  ..., -275.2500, -280.0000,
+#          -252.3750]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-223.1250, -229.0000, -230.6250,  ..., -240.6250, -240.2500,
+#          -224.8750]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-226.5000, -224.8750, -230.7500,  ..., -256.0000, -255.7500,
+#          -233.5000]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-130.5000, -127.6250, -129.7500,  ..., -159.0000, -152.0000,
+#          -133.5000]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-567.0000, -564.0000, -565.5000,  ..., -605.0000, -599.5000,
+#          -568.0000]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-522.0000, -517.5000, -524.5000,  ..., -563.0000, -545.5000,
+#          -523.0000]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[113.1875, 114.7500, 114.5000,  ...,  85.8750,  88.7500, 105.1250]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[24.3906, 24.6562, 27.2500,  ..., -2.6992, -1.1064, 14.9062]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[221.8750, 222.0000, 225.1250,  ..., 197.2500, 190.7500, 210.1250]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[156.3750, 154.3750, 154.1250,  ..., 133.5000, 136.3750, 155.7500]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[282.7500, 286.0000, 285.2500,  ..., 263.0000, 262.0000, 276.7500]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[329.7500, 327.7500, 334.7500,  ..., 308.5000, 311.5000, 346.5000]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[-668.0000, -662.0000, -671.0000,  ..., -724.0000, -737.5000,
+#          -660.5000]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[ -72.1875,  -61.8125,  -58.6875,  ..., -101.5000, -105.2500,
+#           -80.3750]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-196.2500, -201.3750, -202.6250,  ..., -217.2500, -223.6250,
+#          -201.5000]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-143.7500, -153.5000, -158.5000,  ..., -175.1250, -186.2500,
+#          -163.5000]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[  2.5898,   2.1836,   4.9375,  ..., -26.8438, -29.2969,  -5.6250]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[159.5000, 160.6250, 162.3750,  ..., 140.2500, 131.1250, 149.6250]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[-152.6250, -159.7500, -154.2500,  ..., -176.0000, -187.3750,
+#          -151.3750]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[-323.5000, -320.0000, -321.5000,  ..., -343.0000, -346.5000,
+#          -323.7500]], device='cuda:0', dtype=torch.float16)
+# logits tensor([[ -6.4453,  -3.9531,  -5.9336,  ..., -28.7188, -31.1875,  -3.7383]],
+#        device='cuda:0', dtype=torch.float16)
+# logits tensor([[348.7500, 347.0000, 358.7500,  ..., 334.5000, 332.5000, 369.7500]],
+#        device='cuda:0', dtype=torch.float16)
