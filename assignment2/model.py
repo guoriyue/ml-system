@@ -135,8 +135,8 @@ class CausalSelfAttention(nn.Module):
         self.kv_cache[1, :B, :, self.seq_pos:self.seq_pos + T, :] = v
 
         # compute manual implmentation of attention using the kv cache
-        k_concat = torch.cat((self.kv_cache[0, :B, :, :self.seq_pos, :], k), dim=2)
-        v_concat = torch.cat((self.kv_cache[1, :B, :, :self.seq_pos, :], v), dim=2)
+        k_concat = self.kv_cache[0, :B, :, :self.seq_pos + T, :]
+        v_concat = self.kv_cache[1, :B, :, :self.seq_pos + T, :]
 
         att = (q @ k_concat.transpose(-2, -1)) * (1.0 / math.sqrt(k_concat.size(-1)))
         att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf'))
@@ -634,7 +634,6 @@ class GPT(nn.Module):
                 logits = speculative_logits[:, i, :] / temperature
                 # print("logits", logits)
                 # return
-                
                 # optionally crop the logits to only the top k options
                 if top_k is not None:
                     v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
@@ -665,7 +664,9 @@ class GPT(nn.Module):
                 # print("idx_next, idx_speculative[:, i]", idx_next, idx_speculative[:, i])
                 # print("idx_next.item() != idx_speculative[:, i].item()", idx_next.item() != idx_speculative[:, i].item())
                 # end the loop if the next token does not match the next token in idx_speculative
-                if idx_next.item() != idx_speculative[:, i].item():
+                if i == idx_speculative.size(1) - 1:
+                    break
+                if idx_next.item() != idx_speculative[:, i+1].item():
                     break
                 
             ### END YOUR CODE HERE
